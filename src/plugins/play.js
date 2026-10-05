@@ -78,8 +78,8 @@ export default {
 
 							const { sendButtons } = await import('../helper/sendbuttons.js');
 							await sendButtons(hisoka, m.from, caption, [
-								{ id: audioId, text: '🎵 Audio MP3' },
-								{ id: videoId, text: '🎬 Video MP4' },
+								{ id: audioId, text: '← 🎵 Audio MP3' },
+								{ id: videoId, text: '← 🎬 Video MP4 (360p)' },
 							], {
 								quoted: m,
 								footer: '⏳ Pilihan hangus dalam 2 menit',
