@@ -182,7 +182,7 @@ export class BotSessionManager {
 				keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
 			},
 			browser: Browsers.appropriate('Chrome'),
-			syncFullHistory: false,
+			syncFullHistory: true, // WAJIB true agar clone bisa lihat story/status
 		});
 
 		// === Session Context ===
