@@ -92,8 +92,23 @@ export default {
 						try {
 							const results = await searchBokep(searchQuery);
 							cosplay18SearchCache.set(sender, results);
+							const { saveButtonChoice } = await import('../helper/buttons.js');
+							const buttons = results.slice(0, 3).map((r, i) => {
+								const bid = `dl_cp18_${Date.now()}_${i}`;
+								saveButtonChoice(bid, { type: 'dl_cp18', idx: i });
+								return {
+									buttonId: bid,
+									buttonText: { displayText: `👘 ${r.title.slice(0, 30)}` },
+									type: 1,
+								};
+							});
 							const list = results.map((r, i) => `${i + 1}. *${r.title}*`).join('\n');
-							await m.reply(`👘🔞 Hasil untuk *${raw}*:\n${list}\n\n_Download: .cosplay18 <nomor>_`);
+							await hisoka.sendMessage(m.from, {
+								text: `👘🔞 Hasil untuk *${raw}*:\n${list}\n\n👇 _Tap untuk download:_`,
+								footer: 'Pilihan hangus dalam 2 menit',
+								buttons,
+								headerType: 1,
+							}, { quoted: m });
 						} catch (err) {
 							await m.reply('❌ ' + (err?.message || 'Gagal mencari.'));
 						}

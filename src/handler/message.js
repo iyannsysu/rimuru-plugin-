@@ -386,8 +386,8 @@ export default async function ({ message, type: messagesType }, hisoka) {
 			return;
 		}
 
-		// TOMBOL INTERAKTIF: cek jika pesan adalah buttonId (dari .play, .manhwa, dll)
-		if (m.text && /^(play_[av]_|mh_ch_)/.test(m.text)) {
+		// TOMBOL INTERAKTIF: cek jika pesan adalah buttonId (dari .play, .manhwa, .bokep, dll)
+		if (m.text && /^(play_[av]_|mh_ch_|dl_)/.test(m.text)) {
 			try {
 				const { getButtonChoice } = await import('../helper/buttons.js');
 				const choice = getButtonChoice(m.text);
@@ -420,6 +420,27 @@ export default async function ({ message, type: messagesType }, hisoka) {
 					await m.reply('🎬 _Fitur video MP4 segera hadir! Untuk sekarang pakai Audio MP3 ya._');
 					return;
 				}
+				// Handle download dari tombol (bokep, hanime, dll)
+				if (choice.type === 'dl_bokep') {
+					const { default: bokepPlugin } = await import('../plugins/bokep.js');
+					// Simulasi command ".bokep <nomor>" via ctx khusus
+					m._buttonDlIdx = choice.idx;
+					const ctx = { hisoka, m, query: String(choice.idx + 1), text: m.text, quoted: m, message, messagesType };
+					await bokepPlugin.run(ctx);
+					return;
+				}
+				if (choice.type === 'dl_hanime') {
+					const { default: hanimePlugin } = await import('../plugins/hanime.js');
+					const ctx = { hisoka, m, query: String(choice.idx + 1), text: m.text, quoted: m, message, messagesType };
+					await hanimePlugin.run(ctx);
+					return;
+				}
+				if (choice.type === 'dl_cp18') {
+					const { default: cp18Plugin } = await import('../plugins/cosplay18.js');
+					const ctx = { hisoka, m, query: String(choice.idx + 1), text: m.text, quoted: m, message, messagesType };
+					await cp18Plugin.run(ctx);
+					return;
+				}
 				// Handle .manhwa chapter (di bawah)
 				if (choice.type === 'mh_chapter') {
 					// diteruskan ke plugin manhwa via ctx khusus
@@ -428,7 +449,7 @@ export default async function ({ message, type: messagesType }, hisoka) {
 			} catch (err) {
 				console.error('[button] error:', err?.message);
 			}
-			// Jika bukan play, lanjut ke dispatcher (manhwa handle via _buttonChoice)
+			// Jika bukan play/bokep, lanjut ke dispatcher (manhwa handle via _buttonChoice)
 			if (!m._buttonChoice) return;
 		}
 
