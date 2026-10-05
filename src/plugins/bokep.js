@@ -76,19 +76,8 @@ export default {
 						try {
 							const results = await searchBokep(raw);
 							bokepSearchCache.set(sender, results);
-							// Tampilkan 3 teratas sebagai tombol
-							const { saveButtonChoice } = await import('../helper/buttons.js');
-							const top3 = results.slice(0, 3);
-							const btnData = top3.map((r, i) => {
-								const bid = `dl_bokep_${Date.now()}_${i}`;
-								saveButtonChoice(bid, { type: 'dl_bokep', idx: i, sender });
-								return { id: bid, text: `🎬 ${r.title.slice(0, 25)}` };
-							});
 							const list = results.map((r, i) => `${i + 1}. *${r.title}*`).join('\n');
-							const { sendButtons } = await import('../helper/sendbuttons.js');
-							await sendButtons(hisoka, m.from,
-								`🔞 Hasil untuk *${raw}*:\n${list}\n\n👇 _Tap untuk download langsung:_`,
-								btnData, { quoted: m, footer: 'Pilihan hangus dalam 2 menit' });
+							await m.reply(`🔞 Hasil untuk *${raw}*:\n${list}\n\n_Download: .bokep <nomor>_`);
 						} catch (err) {
 							await m.reply('❌ ' + (err?.message || 'Gagal mencari.'));
 						}

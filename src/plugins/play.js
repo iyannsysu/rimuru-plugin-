@@ -1,6 +1,5 @@
 'use strict';
-// Auto-generated dari message.js — command: play
-// Kategori: other
+// Command: play — download audio YouTube langsung
 
 import * as shared from './_shared.js';
 
@@ -41,53 +40,29 @@ export default {
 						}
 
 						const { startLoading: slPlay } = await import('../helper/loading.js');
-						const { saveButtonChoice } = await import('../helper/buttons.js');
 						const playLoad = await slPlay(hisoka, m, 'Mencari lagu');
 
+						let res = null;
 						try {
-							// Cari info video dulu (tanpa download)
-							const { searchViaYtDlp, CLIENTS } = await import('../helper/youtube.js').catch(() => ({}));
-							// Gunakan Neoxr untuk info cepat
-							const NEOXR_APIKEY = process.env.NEOXR_APIKEY || 'Fahridev12Z';
-							const apiRes = await fetch(`https://api.neoxr.eu/api/play?q=${encodeURIComponent(q)}&apikey=${NEOXR_APIKEY}`, {
-								headers: { 'User-Agent': 'Mozilla/5.0' },
-								signal: AbortSignal.timeout(20000),
-							});
-							const info = await apiRes.json();
-							if (!info?.status || !info?.data?.url) {
-								throw new Error('Lagu tidak ketemu, coba kata kunci lain.');
-							}
+							res = await downloadYouTubeAudio(q);
+							const data = fs.readFileSync(res.file);
+							const safeTitle = res.title.replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'audio';
 
 							await playLoad.stop();
 
-							const vid = info.id || `play_${Date.now()}`;
-							const title = info.title || q;
-							const duration = info.duration || '-';
-							const views = info.views || '-';
-							const channel = info.channel || '-';
-							const thumb = info.thumbnail;
-							const audioUrl = info.data.url;
-
-							// Simpan pilihan tombol (kedaluwarsa 2 menit)
-							const audioId = `play_a_${vid}_${Date.now()}`;
-							const videoId = `play_v_${vid}_${Date.now()}`;
-							saveButtonChoice(audioId, { type: 'play_audio', title, audioUrl, query: q });
-							saveButtonChoice(videoId, { type: 'play_video', title, query: q, videoUrl: info.id ? `https://www.youtube.com/watch?v=${info.id}` : null });
-
-							const caption = `┌─〔 🎵 PLAY MUSIC 〕─┐\n│\n│ 📌 *${title}*\n│ ⏱️ Durasi : ${duration}\n│ 👁️ Views  : ${views}\n│ 👤 Channel: ${channel}\n│ 🔗 Link   : https://www.youtube.com/watch?v=${info.id || ''}\n│\n│ Pilih format di bawah 👇\n└───────────────`;
-
-							const { sendButtons } = await import('../helper/sendbuttons.js');
-							await sendButtons(hisoka, m.from, caption, [
-								{ id: audioId, text: '← 🎵 Audio MP3' },
-								{ id: videoId, text: '← 🎬 Video MP4 (360p)' },
-							], {
-								quoted: m,
-								footer: '⏳ Pilihan hangus dalam 2 menit',
-								image: thumb,
-							});
+							const content =
+								data.length > 100 * 1024 * 1024
+									? { document: data, fileName: `${safeTitle}.mp3` }
+									: { audio: data, mimetype: 'audio/mpeg', fileName: `${safeTitle}.mp3` };
+							await hisoka.sendMessage(m.from, content, { quoted: m });
 						} catch (err) {
-							const emsg = err?.message || 'Gagal mencari lagu.';
-							await playLoad.fail('❌ ' + emsg);
+							const emsg = err?.message || 'Gagal mengunduh audio.';
+							const friendly = /Semua client gagal|not a bot|Sign in/i.test(emsg)
+								? '❌ YouTube lagi nge-block server bot 😅\nCoba lagi 5-10 menit lagi ya.'
+								: '❌ ' + emsg;
+							await playLoad.fail(friendly);
+						} finally {
+							if (res && !res.cached) cleanupYouTubeAudio(res.file);
 						}
 					}
 					return;
