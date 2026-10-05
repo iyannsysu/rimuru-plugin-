@@ -81,16 +81,35 @@ export default {
 		await m.reply(`🔄 Meminta pairing code untuk ${num}...\nTunggu sebentar...`);
 		try {
 			await startClone(num, async (code) => {
-				await m.reply(
-					`📱 *Pairing Code untuk ${num}:*\n\n` +
-					`*${code}*\n\n` +
-					`Cara pakai:\n` +
-					`1. Buka WhatsApp di nomor ${num}\n` +
-					`2. Pengaturan → Perangkat Tertaut → Tautkan\n` +
-					`3. Pilih "Tautkan dengan nomor telepon"\n` +
-					`4. Masukkan kode di atas\n\n` +
-					`⏳ _Kode kedaluwarsa dalam 2 menit_`
-				);
+				const sentMsg = await hisoka.sendMessage(m.from, {
+					text:
+						`📱 *Pairing Code untuk ${num}:*\n\n` +
+						`*${code}*\n\n` +
+						`Cara pakai:\n` +
+						`1. Buka WhatsApp di nomor ${num}\n` +
+						`2. Pengaturan → Perangkat Tertaut → Tautkan\n` +
+						`3. Pilih "Tautkan dengan nomor telepon"\n` +
+						`4. Masukkan kode di atas\n\n` +
+						`⏳ _Kode kedaluwarsa dalam 2 menit_`
+				}, { quoted: m });
+
+				// Setelah 2 menit, cek apakah clone sudah terhubung.
+				// Kalau belum, edit pesan jadi KEDALUWARSA.
+				setTimeout(async () => {
+					try {
+						const { getClone } = await import('../helper/jadibot.js');
+						const clone = getClone(num);
+						if (clone?.status === 'open') return; // sudah terhubung, biarkan
+						await hisoka.sendMessage(m.from, {
+							text:
+								`📱 *Pairing Code untuk ${num}:*\n\n` +
+								`*${code}*\n\n` +
+								`❌ *KEDALUWARSA*\n` +
+								`Kode sudah tidak berlaku. Ketik *.jadibot ${num}* untuk minta kode baru.`,
+							edit: sentMsg.key,
+						});
+					} catch {}
+				}, 2 * 60 * 1000).unref?.();
 			});
 		} catch (err) {
 			await m.reply('❌ ' + (err?.message || 'Gagal membuat clone.'));
