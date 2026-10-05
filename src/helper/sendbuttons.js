@@ -14,6 +14,16 @@
 export async function sendButtons(hisoka, jid, text, buttons, opts = {}) {
 	const { quoted, footer, image } = opts;
 
+	// Jika ada gambar, kirim gambar dulu terpisah (interactive header image bermasalah)
+	if (image) {
+		try {
+			await hisoka.sendMessage(jid, {
+				image: { url: image },
+				caption: text.split('\n').slice(0, 6).join('\n'),
+			}, quoted ? { quoted } : {});
+		} catch {}
+	}
+
 	// Format tombol untuk nativeFlowMessage
 	const btnList = buttons.slice(0, 3).map(b => ({
 		name: 'quick_reply',
@@ -24,16 +34,11 @@ export async function sendButtons(hisoka, jid, text, buttons, opts = {}) {
 	}));
 
 	const interactiveMessage = {
-		body: { text },
-		footer: footer ? { text: footer } : undefined,
-		header: image
-			? { title: '', subtitle: '', hasMediaAttachment: false, imageMessage: { url: image } }
-			: { title: '', subtitle: '', hasMediaAttachment: false },
+		body: { text: image ? text : text },
 		nativeFlowMessage: { buttons: btnList },
 	};
 
-	// Hapus undefined
-	if (!interactiveMessage.footer) delete interactiveMessage.footer;
+	if (footer) interactiveMessage.footer = { text: footer };
 
 	const msg = { interactiveMessage };
 	return hisoka.sendMessage(jid, msg, quoted ? { quoted } : {});
