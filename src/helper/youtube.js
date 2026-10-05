@@ -1,9 +1,9 @@
 'use strict';
 
-// Scraper YouTube sendiri — multi-client fallback chain.
-// Masalah: YouTube kadang mengaktifkan SABR experiment per-session yang bikin
-// satu player client tidak dapat format audio. Solusi: coba beberapa client
-// berurutan (android -> ios -> web -> tv), plus fallback scraping HTML.
+// Download audio YouTube — strategi berlapis:
+// 1. Neoxr API (server pihak ketiga, anti-block YouTube)
+// 2. yt-dlp multi-client (android -> ios -> web -> tv) + fallback HTML
+// Cache lokal untuk query yang sudah pernah didownload.
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -16,6 +16,11 @@ const execFileAsync = promisify(execFile);
 const YTDLP = process.env.YTDLP_PATH || '/home/hatch/workspace/tiktokbot/venv/bin/yt-dlp';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 const MAX_DURATION = 20 * 60;
+
+// Neoxr API — API key publik dari config Renzona (gratis).
+// Bisa diganti via env NEOXR_APIKEY kalau key ini mati/rate-limit.
+const NEOXR_APIKEY = process.env.NEOXR_APIKEY || 'Fahridev12Z';
+const NEOXR_BASE = 'https://api.neoxr.eu/api';
 
 // Cache lagu: query yang sudah pernah didownload tidak perlu ambil ulang.
 // Hemat dari YouTube block + lebih cepat.
@@ -145,8 +150,40 @@ async function downloadAudio(videoId, tmpDir) {
 	throw new Error('Semua client gagal: ' + errors.join(' | ').slice(0, 200));
 }
 
+/** Download audio via Neoxr API (server pihak ketiga, bypass block YouTube). */
+async function downloadViaNeoxr(query, tmpDir) {
+	const apiUrl = `${NEOXR_BASE}/play?q=${encodeURIComponent(query)}&apikey=${NEOXR_APIKEY}`;
+	const res = await fetch(apiUrl, {
+		headers: { 'User-Agent': UA },
+		signal: AbortSignal.timeout(30000),
+	});
+	if (!res.ok) throw new Error(`Neoxr HTTP ${res.status}`);
+	const data = await res.json();
+	if (!data?.status || !data?.data?.url) {
+		throw new Error('Neoxr: tidak ada URL audio');
+	}
+	// Cek durasi
+	const duration = data.duration_seconds || 0;
+	if (duration > MAX_DURATION) {
+		throw new Error(`Kepanjangan (${Math.round(duration / 60)} mnt), maksimal 20 menit.`);
+	}
+	// Download file audio dari URL Neoxr
+	const mediaRes = await fetch(data.data.url, {
+		headers: { 'User-Agent': UA },
+		signal: AbortSignal.timeout(120000),
+	});
+	if (!mediaRes.ok) throw new Error(`Neoxr download HTTP ${mediaRes.status}`);
+	const buffer = Buffer.from(await mediaRes.arrayBuffer());
+	if (buffer.length < 20 * 1024) throw new Error('Neoxr: file terlalu kecil');
+	const safeTitle = (data.title || 'audio').replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'audio';
+	const file = path.join(tmpDir, `${safeTitle}.mp3`);
+	fs.writeFileSync(file, buffer);
+	return { file, title: data.title || query, duration };
+}
+
 /**
  * Cari video YouTube pertama dari kata kunci lalu unduh audionya (mp3).
+ * Urutan: cache -> Neoxr API -> yt-dlp multi-client.
  * @returns {Promise<{file: string, title: string, duration: number}>}
  */
 export async function downloadYouTubeAudio(query) {
@@ -155,6 +192,16 @@ export async function downloadYouTubeAudio(query) {
 	if (cached) return { file: cached.file, title: cached.title, duration: 0, cached: true };
 
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yt-'));
+	const errors = [];
+	// 1. Coba Neoxr API dulu (paling tahan block)
+	try {
+		const result = await downloadViaNeoxr(query, tmpDir);
+		putCache(query, result.file, result.title);
+		return result;
+	} catch (e) {
+		errors.push(`neoxr: ${(e.message || '').slice(0, 80)}`);
+	}
+	// 2. Fallback ke yt-dlp multi-client
 	try {
 		const video = await findVideo(query);
 		if (video.duration > MAX_DURATION) {
@@ -165,8 +212,9 @@ export async function downloadYouTubeAudio(query) {
 		return { file, title: video.title, duration: video.duration };
 	} catch (err) {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
-		if (/^(Tidak ketemu|Kepanjangan|Semua client gagal)/.test(err.message)) throw err;
-		throw new Error('Gagal mengunduh audio. Coba lagi atau ganti kata kunci.');
+		errors.push(`ytdlp: ${(err.message || '').slice(0, 80)}`);
+		if (/^(Tidak ketemu|Kepanjangan)/.test(err.message)) throw err;
+		throw new Error('Gagal mengunduh audio (' + errors.join(' | ').slice(0, 150) + '). Coba lagi atau ganti kata kunci.');
 	}
 }
 
