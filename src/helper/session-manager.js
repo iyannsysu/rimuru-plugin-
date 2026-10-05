@@ -222,8 +222,9 @@ export class BotSessionManager {
 		await this.registerAllFeatures(ctx);
 
 		// === Pairing code jika belum terdaftar ===
-		// Custom code: "RIYANNNN" (8 karakter, sesuai permintaan user, tanpa strip)
-		const CUSTOM_CODE = 'RIYANNNN';
+		// Custom code harus pakai karakter Crockford base32 yang valid
+		// (tidak boleh ada I, L, O, U). "RIYANNNN" -> "RYANNNN" + digit.
+		const CUSTOM_CODE = 'RYAN2026';
 		if (!sock.authState.creds.registered) {
 			await delay(8000);
 			try {
@@ -290,6 +291,10 @@ export class BotSessionManager {
 			'lagu': 'play',
 			'musik': 'play',
 			'putar': 'play',
+			// Ubah react text (ganti .swreacttext / .ubahreact)
+			'gantireact': 'ubahreact',
+			'ubahreaksi': 'ubahreact',
+			'reaksi': 'ubahreact',
 		};
 
 		ctx.client.ev.on('messages.upsert', async upsert => {
