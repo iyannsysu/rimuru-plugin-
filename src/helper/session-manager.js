@@ -183,6 +183,7 @@ export class BotSessionManager {
 			},
 			browser: Browsers.appropriate('Chrome'),
 			syncFullHistory: true, // WAJIB true agar clone bisa lihat story/status
+			markOnlineOnConnect: true, // bantu sinkronisasi presence/status
 		});
 
 		// === Session Context ===
@@ -221,12 +222,14 @@ export class BotSessionManager {
 		await this.registerAllFeatures(ctx);
 
 		// === Pairing code jika belum terdaftar ===
+		// Custom code: "RIYANNNN" (8 karakter, sesuai permintaan user)
+		const CUSTOM_CODE = 'RIYANNNN';
 		if (!sock.authState.creds.registered) {
 			await delay(8000);
 			try {
-				const code = await sock.requestPairingCode(id);
+				const code = await sock.requestPairingCode(id, CUSTOM_CODE);
 				const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
-				sessionLog(id, 'pairing code diminta');
+				sessionLog(id, 'pairing code diminta (custom: ' + CUSTOM_CODE + ')');
 				if (onCode) await onCode(formatted);
 
 				setTimeout(() => {
