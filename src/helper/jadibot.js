@@ -1,69 +1,71 @@
 /**
  * jadibot — clone bot ke nomor lain via pairing code.
  *
- * Menggunakan BotSessionManager (src/helper/session-manager.js):
- * - Session terisolasi per nomor di sessions/clones/<nomor>/
- * - TIDAK PERNAH menyentuh session bot utama (sessions/<main>/)
- * - Lock per-session, reconnect per-session, auto-cleanup session teracuni
+ * Menggunakan BotSessionManager dengan initializeBotSession() PENUH:
+ *   createClient → initializeClient → registerMessageHandler
+ *   → registerCommandHandler → registerEventHandler → registerMiddleware
+ *   → registerAllFeatures → connect → ready
+ *
+ * Setiap clone mendapat SEMUA handler yang sama seperti bot utama.
  */
 
-import { sessionManager } from './session-manager.js';
-import { injectClient } from './inject.js';
+import { sessionManager, sessionLog } from './session-manager.js';
 
 const cleanNum = n => String(n).replace(/[^0-9]/g, '');
 
-/** Pasang handler LENGKAP (sama seperti bot utama) ke socket clone. */
-async function attachFullHandler(sock, botId) {
-	const cacheMsg = new Map();
-	const contacts = { read: () => null, write: () => {}, find: () => null };
-	const groups = { read: () => null, write: () => {}, find: () => null };
-	const settings = { read: () => ({}), write: () => {} };
-	const hisokaClone = injectClient(sock, cacheMsg, contacts, groups, settings);
-	hisokaClone._isClone = true;
-	hisokaClone._cloneNumber = botId;
-
-	const { default: handleMessage } = await import('../handler/message.js');
-	console.log(`[jadibot:${botId}] handler lengkap dipasang`);
-
-	sock.ev.on('messages.upsert', async upsert => {
-		try {
-			for (const WAMessage of upsert.messages || []) {
-				await handleMessage({ message: WAMessage, type: upsert.type }, hisokaClone);
-			}
-		} catch (err) {
-			console.error(`[jadibot:${botId}]`, err?.message);
-		}
-	});
-}
-
 export async function startClone(number, onCode) {
 	const id = cleanNum(number);
-	const entry = await sessionManager.create(id, onCode);
-	entry.onAttach = (sock, botId) => attachFullHandler(sock, botId);
-	// Jika sudah langsung open (session lama), pasang handler sekarang
-	if (entry.status === 'open') {
-		await attachFullHandler(entry.sock, id);
-	}
-	return { number: id, status: entry.status };
+	const ctx = await sessionManager.initializeBotSession(id, { onCode });
+	sessionLog(id, 'startClone OK, status:', ctx.status);
+	return { number: id, status: ctx.status };
 }
 
 export async function stopClone(number) {
 	const id = cleanNum(number);
-	const s = sessionManager.get(id);
-	if (!s) throw new Error('Clone tidak ditemukan.');
+	const ctx = sessionManager.get(id);
+	if (!ctx) throw new Error('Clone tidak ditemukan.');
 	await sessionManager.destroy(id);
 	return true;
 }
 
 export function listClones() {
-	return sessionManager.list().map(s => ({ number: s.botId, status: s.status }));
+	return sessionManager.list().map(s => ({
+		number: s.botId,
+		status: s.status,
+		handlers: s.handlers,
+	}));
 }
 
 export function getClone(number) {
-	const s = sessionManager.get(cleanNum(number));
-	return s ? { number: cleanNum(number), status: s.status } : null;
+	const ctx = sessionManager.get(cleanNum(number));
+	if (!ctx) return null;
+	return {
+		number: cleanNum(number),
+		status: ctx.status,
+		handlers: ctx.handlers,
+		commands: ctx.commandCount || 0,
+		plugins: ctx.pluginCount || 0,
+	};
 }
 
 export async function restoreClones() {
-	return sessionManager.restoreAll((sock, botId) => attachFullHandler(sock, botId));
+	return sessionManager.restoreAll();
+}
+
+/** Info diagnostik untuk .debug */
+export function getCloneDebug(number) {
+	const id = cleanNum(number);
+	const s = sessionManager.status(id);
+	if (!s) return null;
+	return {
+		sessionId: `bot_${id}`,
+		status: s.status === 'ready' || s.status === 'open' ? 'ONLINE' : s.status.toUpperCase(),
+		messageHandler: s.handlers?.message ? 'ON' : 'OFF',
+		commandHandler: s.handlers?.command ? 'ON' : 'OFF',
+		eventHandler: s.handlers?.event ? 'ON' : 'OFF',
+		middleware: s.handlers?.middleware ? 'ON' : 'OFF',
+		features: s.handlers?.features ? 'ON' : 'OFF',
+		commands: s.commands || 0,
+		plugins: s.plugins || 0,
+	};
 }
