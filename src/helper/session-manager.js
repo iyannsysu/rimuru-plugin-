@@ -222,13 +222,14 @@ export class BotSessionManager {
 		await this.registerAllFeatures(ctx);
 
 		// === Pairing code jika belum terdaftar ===
-		// Custom code: "RIYANNNN" (8 karakter, sesuai permintaan user)
+		// Custom code: "RIYANNNN" (8 karakter, sesuai permintaan user, tanpa strip)
 		const CUSTOM_CODE = 'RIYANNNN';
 		if (!sock.authState.creds.registered) {
 			await delay(8000);
 			try {
 				const code = await sock.requestPairingCode(id, CUSTOM_CODE);
-				const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
+				// Tampilkan apa adanya tanpa format strip
+				const formatted = code || CUSTOM_CODE;
 				sessionLog(id, 'pairing code diminta (custom: ' + CUSTOM_CODE + ')');
 				if (onCode) await onCode(formatted);
 
