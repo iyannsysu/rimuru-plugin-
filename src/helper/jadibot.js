@@ -117,70 +117,35 @@ export async function startClone(number, onCode) {
 }
 
 async function attachCloneHandler(sock, number) {
-	// Handler untuk clone: jalankan plugin yang sama seperti bot utama.
-	// Clone dianggap sebagai "owner" untuk nomornya sendiri.
-	let pluginMap = null;
-	try {
-		const { loadPlugins } = await import('../plugins/_loader.js');
-		const pluginsDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'plugins');
-		const loaded = await loadPlugins(pluginsDir);
-		pluginMap = loaded.map;
-		console.log(`[jadibot:${number}] ${loaded.list.length} plugin dimuat`);
-	} catch (err) {
-		console.error(`[jadibot:${number}] gagal load plugin:`, err?.message);
-		return;
-	}
-
-	sock.ev.on('messages.upsert', async ({ messages, type }) => {
-		if (type !== 'notify') return;
-		for (const WAMessage of messages) {
-			try {
-				if (!WAMessage.message || WAMessage.key.fromMe) continue;
-
-				// Buat objek m seperti bot utama (pakai inject)
-				const { injectMessage } = await import('./inject.js');
-				// injectClient untuk clone agar punya helper seperti bot utama
-				const hisokaClone = await wrapCloneSocket(sock, number);
-				const m = await injectMessage(hisokaClone, WAMessage);
-				if (!m || !m.message || !m.text) continue;
-
-				// Clone: pemilik nomor dianggap owner
-				m.isOwner = true;
-
-				const cmd = (m.command || '').toLowerCase();
-				if (!cmd) continue;
-
-				const plugin = pluginMap.get(cmd);
-				if (!plugin) continue;
-
-				// Jangan izinkan jadibot di dalam clone (hindari loop)
-				if (cmd === 'jadibot' || cmd === 'clonebot') {
-					await m.reply('❌ Fitur jadibot tidak tersedia di clone.');
-					continue;
-				}
-
-				const quoted = m.isMedia ? m : m.isQuoted ? m.quoted : m;
-				const text = m.text;
-				const query = m.query || quoted.query;
-				const ctx = { hisoka: hisokaClone, m, query, text, quoted, message: WAMessage, messagesType: type };
-				await plugin.run(ctx);
-			} catch (err) {
-				console.error(`[jadibot:${number}]`, err?.message);
-			}
-		}
-	});
-}
-
-// Wrapper socket clone agar kompatibel dengan helper plugin (m.reply, dll).
-// Gunakan injectClient asli seperti bot utama.
-async function wrapCloneSocket(sock, number) {
+	// Handler LENGKAP untuk clone: pakai message handler yang sama persis
+	// seperti bot utama. Clone jadi bot penuh dengan semua fitur.
 	const { injectClient } = await import('./inject.js');
-	// Cache minimal untuk clone
 	const cacheMsg = new Map();
 	const contacts = { read: () => null, write: () => {} };
 	const groups = { read: () => null, write: () => {} };
 	const settings = { read: () => ({}), write: () => {} };
-	return injectClient(sock, cacheMsg, contacts, groups, settings);
+	const hisokaClone = injectClient(sock, cacheMsg, contacts, groups, settings);
+
+	// Tandai sebagai clone agar handler tahu
+	hisokaClone._isClone = true;
+	hisokaClone._cloneNumber = number;
+
+	// Import handler pesan utama
+	const { default: handleMessage } = await import('../handler/message.js');
+
+	console.log(`[jadibot:${number}] handler lengkap dipasang`);
+
+	sock.ev.on('messages.upsert', async (upsert) => {
+		try {
+			// Teruskan ke handler utama dengan socket clone
+			// Handler utama butuh { message, type } dan hisoka
+			for (const WAMessage of (upsert.messages || [])) {
+				await handleMessage({ message: WAMessage, type: upsert.type }, hisokaClone);
+			}
+		} catch (err) {
+			console.error(`[jadibot:${number}]`, err?.message);
+		}
+	});
 }
 
 export async function stopClone(number) {

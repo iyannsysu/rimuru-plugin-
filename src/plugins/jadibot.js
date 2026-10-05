@@ -35,6 +35,11 @@ export default {
 	desc: 'Clone bot ke nomor lain',
 	async run(ctx) {
 	const { hisoka, m, query, text, quoted, message, messagesType } = ctx;
+		// Blokir jadibot di dalam clone (hindari loop)
+		if (hisoka._isClone) {
+			await m.reply('❌ Fitur jadibot tidak tersedia di clone bot.');
+			return;
+		}
 		const arg = (query || '').trim();
 		const { startClone, stopClone, listClones } = await import('../helper/jadibot.js');
 
