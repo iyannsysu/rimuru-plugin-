@@ -43,6 +43,42 @@ export default {
 						const cmdName = isManhua ? 'manhua' : 'manhwa';
 						const flag = isManhua ? '🇨🇳' : '🇰🇷';
 
+						// TOMBOL: user tap chapter dari daftar (m._buttonChoice diset di message.js)
+						if (m._buttonChoice?.type === 'mh_chapter') {
+							const bc = m._buttonChoice;
+							const { getChapterPages, downloadPage } = await import('../helper/mangadex.js');
+							await m.reply(`📖 Mengambil *${bc.manga.title}* chapter ${bc.chapter}...`);
+							try {
+								const pages = await getChapterPages(bc.chapterId);
+								await m.reply(`📄 ${pages.length} halaman, mengunduh...`);
+								const bufs = [];
+								for (let i = 0; i < pages.length; i += 4) {
+									const batch = await Promise.allSettled(
+										pages.slice(i, i + 4).map(u => downloadPage(u))
+									);
+									for (const r of batch) if (r.status === 'fulfilled') bufs.push(r.value);
+								}
+								if (!bufs.length) {
+									await m.reply('❌ Gagal mengunduh halaman.');
+									return;
+								}
+								for (let i = 0; i < bufs.length; i += 8) {
+									const chunk = bufs.slice(i, i + 8);
+									const files = chunk.map((b, j) => {
+										const fp = `/tmp/mh_${Date.now()}_${i + j}.jpg`;
+										fs.writeFileSync(fp, b);
+										return fp;
+									});
+									await sendAlbum(hisoka, m.from, files);
+									for (const f of files) { try { fs.unlinkSync(f); } catch {} }
+								}
+								await m.reply(`✅ Selesai: *${bc.manga.title}* ch.${bc.chapter} (${bufs.length} hlm)`);
+							} catch (err) {
+								await m.reply('❌ ' + (err?.message || 'Gagal mengambil chapter.'));
+							}
+							return;
+						}
+
 						// .manhwa baca <nomor> <chapter>
 						const bacaMatch = raw.match(/^baca\s+(\d+)\s+([\d.]+)/i);
 						if (bacaMatch) {
@@ -121,12 +157,31 @@ export default {
 									return;
 								}
 								manhwaChapterCache.set(sender, { manga, chapters });
-								const list = chapters.slice(0, 30).map(c => `• ${c.chapter}${c.title ? ' — ' + c.title.slice(0, 30) : ''}`).join('\n');
-								const more = chapters.length > 30 ? `\n_...dan ${chapters.length - 30} lainnya_` : '';
-								await m.reply(
-									`📚 *${manga.title}*\n${chapters.length} chapter (ID):\n${list}${more}\n\n` +
-									`_Baca: .manhwa baca ${idx + 1} <chapter>_`
-								);
+								// Tampilkan 3 chapter terbaru sebagai tombol (seperti .play)
+								const { saveButtonChoice } = await import('../helper/buttons.js');
+								const latest = chapters.slice(0, 3);
+								const buttons = latest.map((c, i) => {
+									const bid = `mh_ch_${Date.now()}_${i}`;
+									saveButtonChoice(bid, {
+										type: 'mh_chapter',
+										manga, chapter: c.chapter, chapterId: c.id,
+										mangaIdx: idx,
+									});
+									return {
+										buttonId: bid,
+										buttonText: { displayText: `📖 Ch.${c.chapter}` },
+										type: 1,
+									};
+								});
+								const list = chapters.slice(0, 10).map(c => `• ${c.chapter}${c.title ? ' — ' + c.title.slice(0, 25) : ''}`).join('\n');
+								const more = chapters.length > 10 ? `\n_...dan ${chapters.length - 10} lainnya_` : '';
+								const caption = `📚 *${manga.title}*\n${chapters.length} chapter 🇮🇩\n\n${list}${more}\n\n👇 _Tap tombol untuk baca langsung, atau ketik:_\n_.manhwa baca ${idx + 1} <chapter>_`;
+								await hisoka.sendMessage(m.from, {
+									text: caption,
+									footer: 'Pilihan hangus dalam 2 menit',
+									buttons,
+									headerType: 1,
+								}, { quoted: m });
 							} catch (err) {
 								await m.reply('❌ ' + (err?.message || 'Gagal mengambil chapter.'));
 							}
