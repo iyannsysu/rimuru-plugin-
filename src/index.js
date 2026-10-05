@@ -438,3 +438,15 @@ main().catch(err => {
 	// Uncomment the line below if you want to exit on error
 	// process.exit(1);
 });
+
+// Graceful shutdown: tutup session clone, JANGAN ganggu bot utama
+for (const sig of ['SIGTERM', 'SIGINT']) {
+	process.on(sig, async () => {
+		console.log(`\n[${sig}] graceful shutdown...`);
+		try {
+			const { sessionManager } = await import('./helper/session-manager.js');
+			await sessionManager.shutdown();
+		} catch {}
+		process.exit(0);
+	});
+}
