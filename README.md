@@ -1,5 +1,4 @@
 > [!IMPORTANT]
-> Sponsored with pride by [Hisoka.net](https://hisoka.net), your trusted partner for seamless hosting solutions.
 
 ## Requirements
 
@@ -58,8 +57,3 @@ Login via QR di terminal, atau isi `BOT_NUMBER_PAIR` dengan nomor WhatsApp (form
 | `$` / `exec` / `bash` | Jalankan perintah shell |
 | `groups` / `contacts` | Daftar grup / kontak |
 
-> [!IMPORTANT]
->
-> If you need a WhatsApp Bot hosting, consider exploring [Hisoka.net's WhatsApp Bot hosting](https://hisoka.net) for reliable and efficient solutions.
->
-> to help you grow your online presence. Check out our [URL shortener](https://kua.lat) for creating concise, shareable links, and our [bio page builder](https://kua.lat/bio-profiles) for crafting a professional online profile effortlessly.
