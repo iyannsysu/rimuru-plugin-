@@ -1,7 +1,7 @@
 'use strict';
 
 // Auto-reply "sibuk" berjenjang untuk chat pribadi dari non-owner:
-// chat ke-1 -> pesan sibuk, ke-2 & ke-3 -> kata-kata, ke-4+ -> diam (anti ban).
+// chat ke-1 -> pesan sibuk, ke-2 & ke-3 -> pantun ga on, ke-4+ -> diam (anti ban).
 // Counter reset tiap hari (WIB). Config: data/busyreply.json
 
 import fs from 'fs';
@@ -37,10 +37,10 @@ export function saveBusyCfg(cfg) {
 	}
 }
 
-const QUOTES = [
-	'✨ Kesabaran itu indah — hal baik selalu datang tepat waktu, bukan terburu-buru.',
-	'💪 Orang sibuk bukan berarti lupa, cuma lagi fokus kejar sesuatu yang penting. Ditunggu ya!',
-	'🌙 Malam yang tenang untuk pikiran yang sabar. Semua ada waktunya kok.',
+const PANTUN_GA_ON = [
+	'🪁 *Main layangan putus benangnya*\n*Layangannya jatuh ke kali*\n*Aku lagi nggak pegang HP-nya*\n*Nanti kubalas, jangan sebel hati* 😄',
+	'🍜 *Pergi ke warung beli mie ayam*\n*Pulangnya mampir beli es teh*\n*Maaf ya aku lagi nggak on*\n*Chat kamu pasti kubalas deh* ✨',
+	'🐦 *Burung nuri terbang ke awan*\n*Hinggap sebentar di pohon jati*\n*HP-ku lagi ditinggal tuan*\n*Sabar ya, nanti pasti dibalas lagi* 🙏',
 ];
 
 /** Kembalikan teks balasan untuk chat ke-n (1-based), atau null kalau harus diam. */
@@ -49,7 +49,7 @@ export function busyReplyFor(count) {
 		return 'Maaf, mungkin orangnya lagi sibuk 🙏\nIni pesan otomatis dari *AI pribadi Iyan* 🤖';
 	}
 	if (count === 2 || count === 3) {
-		return QUOTES[(count - 2) % QUOTES.length];
+		return PANTUN_GA_ON[(count - 2) % PANTUN_GA_ON.length];
 	}
 	return null; // ke-4 dan seterusnya: diam total
 }
