@@ -81,6 +81,11 @@ export default {
 		await m.reply(`🔄 Meminta pairing code untuk ${num}...\nTunggu sebentar...`);
 		try {
 			await startClone(num, async (code) => {
+				if (!code) {
+					// Sudah terdaftar sebelumnya, langsung coba hubungkan
+					await m.reply(`✅ Nomor ${num} sudah terdaftar. Menghubungkan ulang...`);
+					return;
+				}
 				const sentMsg = await hisoka.sendMessage(m.from, {
 					text:
 						`📱 *Pairing Code untuk ${num}:*\n\n` +
