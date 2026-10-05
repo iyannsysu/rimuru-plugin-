@@ -139,8 +139,8 @@ async function attachCloneHandler(sock, number) {
 
 				// Buat objek m seperti bot utama (pakai inject)
 				const { injectMessage } = await import('./inject.js');
-				// injectMessage butuh hisoka dengan method tertentu; buat wrapper minimal
-				const hisokaClone = wrapCloneSocket(sock, number);
+				// injectClient untuk clone agar punya helper seperti bot utama
+				const hisokaClone = await wrapCloneSocket(sock, number);
 				const m = await injectMessage(hisokaClone, WAMessage);
 				if (!m || !m.message || !m.text) continue;
 
@@ -172,16 +172,15 @@ async function attachCloneHandler(sock, number) {
 }
 
 // Wrapper socket clone agar kompatibel dengan helper plugin (m.reply, dll).
-// injectMessage memanggil method di hisoka; teruskan ke sock asli.
-function wrapCloneSocket(sock, number) {
-	return new Proxy(sock, {
-		get(target, prop) {
-			if (prop === 'sendMessage') return target.sendMessage.bind(target);
-			const v = target[prop];
-			if (typeof v === 'function') return v.bind(target);
-			return v;
-		}
-	});
+// Gunakan injectClient asli seperti bot utama.
+async function wrapCloneSocket(sock, number) {
+	const { injectClient } = await import('./inject.js');
+	// Cache minimal untuk clone
+	const cacheMsg = new Map();
+	const contacts = { read: () => null, write: () => {} };
+	const groups = { read: () => null, write: () => {} };
+	const settings = { read: () => ({}), write: () => {} };
+	return injectClient(sock, cacheMsg, contacts, groups, settings);
 }
 
 export async function stopClone(number) {
