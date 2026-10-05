@@ -156,3 +156,26 @@ export async function stopClone(number) {
 	clones.delete(cleanNum);
 	return true;
 }
+
+// Auto-restore semua clone yang punya session saat bot utama start.
+export async function restoreClones() {
+	ensureDir();
+	let dirs = [];
+	try {
+		dirs = fs.readdirSync(JADIBOT_DIR).filter(d => {
+			const p = path.join(JADIBOT_DIR, d);
+			return fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, 'creds.json'));
+		});
+	} catch { return []; }
+	const restored = [];
+	for (const num of dirs) {
+		try {
+			await startClone(num, null);
+			restored.push(num);
+			console.log(`[jadibot] restore ${num}`);
+		} catch (err) {
+			console.error(`[jadibot] restore ${num} gagal:`, err?.message);
+		}
+	}
+	return restored;
+}

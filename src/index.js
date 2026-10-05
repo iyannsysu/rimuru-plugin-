@@ -222,6 +222,15 @@ async function main() {
 			lastDisconnect = 0; // Reset lastDisconnect on successful connection
 			console.log(`\x1b[32mConnected successfully! ${JSON.stringify(hisoka.user, null, 2)}\x1b[39m`);
 
+			// Auto-restore jadibot clones
+			try {
+				const { restoreClones } = await import('./helper/jadibot.js');
+				const restored = await restoreClones();
+				if (restored.length) console.log(`\x1b[32m[jadibot] ${restored.length} clone direstore: ${restored.join(', ')}\x1b[39m`);
+			} catch (err) {
+				console.error('[jadibot] restore gagal:', err?.message);
+			}
+
 			// Bio WA otomatis: tampilkan uptime bot (toggle via .uptimebio on/off)
 			if (!hisoka._uptimeBioTimer) {
 				const uptimeBioTick = async () => {
