@@ -146,8 +146,17 @@ async function attachCloneHandler(sock, number) {
 	// seperti bot utama. Clone jadi bot penuh dengan semua fitur.
 	const { injectClient } = await import('./inject.js');
 	const cacheMsg = new Map();
-	const contacts = { read: () => null, write: () => {} };
-	const groups = { read: () => null, write: () => {} };
+	// Stub contacts/groups/settings dengan method yang dibutuhkan inject.js
+	const contacts = {
+		read: () => null,
+		write: () => {},
+		find: () => null,
+	};
+	const groups = {
+		read: () => null,
+		write: () => {},
+		find: () => null,
+	};
 	const settings = { read: () => ({}), write: () => {} };
 	const hisokaClone = injectClient(sock, cacheMsg, contacts, groups, settings);
 
