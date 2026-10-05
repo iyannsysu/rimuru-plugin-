@@ -1,7 +1,8 @@
 'use strict';
-// Command: jadibot — toggle mode bot publik (owner only)
-// .jadibot on  -> bot bisa dipakai orang lain (whitelist command)
-// .jadibot off -> bot hanya untuk owner (self-bot)
+// Command: jadibot — clone bot ke nomor lain via pairing code (owner only)
+// .jadibot <nomor>   -> minta pairing code untuk nomor tersebut
+// .jadibot list      -> lihat clone yang aktif
+// .jadibot stop <nomor> -> matikan clone
 
 import * as shared from './_shared.js';
 
@@ -27,50 +28,73 @@ import * as shared from './_shared.js';
 		readGcLink, handleTikTokDownload, sendAlbum, handleSticker,
 	} = shared;
 
-const CONFIG_PATH = path.join(process.cwd(), 'publicmode.json');
-
-function loadCfg() {
-	try {
-		return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8') || '{}');
-	} catch {
-		return { enabled: false, whitelist: [], ratelimit_per_hour: 15 };
-	}
-}
-
-function saveCfg(cfg) {
-	fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 0));
-}
-
 export default {
 	name: 'jadibot',
-	aliases: ['publicmode', 'modebot'],
+	aliases: ['clonebot'],
 	category: 'owner',
-	desc: 'Toggle mode bot publik',
+	desc: 'Clone bot ke nomor lain',
 	async run(ctx) {
 	const { hisoka, m, query, text, quoted, message, messagesType } = ctx;
-		const arg = (query || '').trim().toLowerCase();
-		const cfg = loadCfg();
+		const arg = (query || '').trim();
+		const { startClone, stopClone, listClones } = await import('../helper/jadibot.js');
 
-		if (arg === 'on') {
-			cfg.enabled = true;
-			saveCfg(cfg);
-			await m.reply('✅ *Mode bot publik AKTIF*\n\nOrang lain sekarang bisa pakai:\n• ' + (cfg.whitelist || []).join(', ') + '\n\nMatikan dengan: .jadibot off');
+		if (!arg) {
+			await m.reply(
+				`🤖 *Jadibot — Clone Bot*\n\n` +
+				`• .jadibot <nomor> — jadi bot di nomor lain\n` +
+				`  Contoh: .jadibot 628123456789\n\n` +
+				`• .jadibot list — lihat clone aktif\n` +
+				`• .jadibot stop <nomor> — matikan clone`
+			);
 			return;
 		}
-		if (arg === 'off') {
-			cfg.enabled = false;
-			saveCfg(cfg);
-			await m.reply('✅ *Mode bot publik MATI*\n\nBot kembali jadi self-bot (hanya owner).');
+
+		if (arg.toLowerCase() === 'list') {
+			const clones = listClones();
+			if (!clones.length) {
+				await m.reply('📭 Belum ada clone bot yang aktif.');
+				return;
+			}
+			const list = clones.map(c => `• ${c.number} — ${c.status}`).join('\n');
+			await m.reply(`🤖 *Clone aktif:*\n${list}`);
 			return;
 		}
-		// Tampilkan status
-		const status = cfg.enabled ? '🟢 AKTIF' : '🔴 MATI';
-		await m.reply(
-			`🤖 *Mode Bot Publik:* ${status}\n\n` +
-			`• .jadibot on — aktifkan\n` +
-			`• .jadibot off — matikan\n\n` +
-			`Command publik: ${(cfg.whitelist || []).join(', ')}`
-		);
+
+		if (arg.toLowerCase().startsWith('stop ')) {
+			const num = arg.slice(5).trim();
+			try {
+				await stopClone(num);
+				await m.reply(`✅ Clone ${num} dimatikan.`);
+			} catch (err) {
+				await m.reply('❌ ' + (err?.message || 'Gagal.'));
+			}
+			return;
+		}
+
+		// .jadibot <nomor> — mulai pairing
+		const num = arg.replace(/[^0-9]/g, '');
+		if (!num || num.length < 10) {
+			await m.reply('❌ Nomor tidak valid. Contoh: .jadibot 628123456789');
+			return;
+		}
+
+		await m.reply(`🔄 Meminta pairing code untuk ${num}...\nTunggu sebentar...`);
+		try {
+			await startClone(num, async (code) => {
+				await m.reply(
+					`📱 *Pairing Code untuk ${num}:*\n\n` +
+					`*${code}*\n\n` +
+					`Cara pakai:\n` +
+					`1. Buka WhatsApp di nomor ${num}\n` +
+					`2. Pengaturan → Perangkat Tertaut → Tautkan\n` +
+					`3. Pilih "Tautkan dengan nomor telepon"\n` +
+					`4. Masukkan kode di atas\n\n` +
+					`⏳ _Kode kedaluwarsa dalam 2 menit_`
+				);
+			});
+		} catch (err) {
+			await m.reply('❌ ' + (err?.message || 'Gagal membuat clone.'));
+		}
 		return;
 	},
 };

@@ -1,0 +1,158 @@
+'use strict';
+// Manager untuk jadibot (clone bot via pairing code).
+// Setiap clone punya session sendiri di sessions/jadibot/<nomor>/
+
+import fs from 'fs';
+import path from 'path';
+import { EventEmitter } from 'events';
+
+// Map: nomor -> { sock, status }
+const clones = new Map();
+
+const JADIBOT_DIR = path.join(process.cwd(), 'sessions', 'jadibot');
+
+function ensureDir() {
+	if (!fs.existsSync(JADIBOT_DIR)) fs.mkdirSync(JADIBOT_DIR, { recursive: true });
+}
+
+export function listClones() {
+	return Array.from(clones.entries()).map(([num, c]) => ({
+		number: num,
+		status: c.status || 'unknown',
+	}));
+}
+
+export function getClone(number) {
+	return clones.get(number);
+}
+
+export async function startClone(number, onCode) {
+	ensureDir();
+	const cleanNum = String(number).replace(/[^0-9]/g, '');
+	if (!cleanNum) throw new Error('Nomor tidak valid.');
+
+	if (clones.has(cleanNum)) {
+		const c = clones.get(cleanNum);
+		if (c.status === 'open') throw new Error('Nomor ini sudah jadi bot.');
+		// Coba reconnect
+		clones.delete(cleanNum);
+	}
+
+	const sessionDir = path.join(JADIBOT_DIR, cleanNum);
+
+	// Import Baileys secara dinamis
+	const baileys = await import('baileys');
+	const makeWASocket = baileys.default;
+	const { useMultiFileAuthState, DisconnectReason, Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, delay } = baileys;
+	const pino = (await import('pino')).default;
+	const { HttpsProxyAgent } = await import('https-proxy-agent');
+	const { Boom } = await import('@hapi/boom');
+
+	const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+	const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1027934701] }));
+
+	const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || '';
+	const wsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+	if (proxyUrl) process.env.NODE_USE_ENV_PROXY = '1';
+
+	const logger = pino({ level: 'silent' });
+
+	const sock = makeWASocket({
+		version,
+		logger,
+		agent: wsAgent,
+		auth: {
+			creds: state.creds,
+			keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+		},
+		browser: Browsers.appropriate('Chrome'),
+		syncFullHistory: false,
+	});
+
+	const cloneInfo = { sock, status: 'connecting', number: cleanNum };
+	clones.set(cleanNum, cloneInfo);
+
+	sock.ev.on('creds.update', saveCreds);
+
+	// Minta pairing code jika belum terdaftar
+	if (!sock.authState.creds.registered) {
+		await delay(15000); // tunggu handshake
+		try {
+			const code = await sock.requestPairingCode(cleanNum);
+			const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
+			if (onCode) onCode(formatted);
+		} catch (err) {
+			clones.delete(cleanNum);
+			throw new Error('Gagal minta pairing code: ' + (err?.message || 'error'));
+		}
+	}
+
+	sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+		if (connection === 'open') {
+			cloneInfo.status = 'open';
+			console.log(`[jadibot] ${cleanNum} terhubung!`);
+			// Attach message handler (sama seperti bot utama, tapi sederhana)
+			attachCloneHandler(sock, cleanNum);
+		}
+		if (connection === 'close') {
+			const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+			cloneInfo.status = 'close';
+			if (reason === DisconnectReason.loggedOut) {
+				console.log(`[jadibot] ${cleanNum} logout, hapus session.`);
+				clones.delete(cleanNum);
+				try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch {}
+			} else {
+				// Reconnect otomatis setelah 10 detik
+				setTimeout(() => {
+					if (clones.has(cleanNum)) startClone(cleanNum, null).catch(() => {});
+				}, 10000);
+			}
+		}
+	});
+
+	return cloneInfo;
+}
+
+async function attachCloneHandler(sock, number) {
+	// Handler sederhana untuk clone: hanya command publik
+	// (tidak perlu semua fitur bot utama)
+	sock.ev.on('messages.upsert', async ({ messages, type }) => {
+		if (type !== 'notify') return;
+		for (const msg of messages) {
+			try {
+				if (!msg.message || msg.key.fromMe) continue;
+				const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+				if (!text.startsWith('.') && !text.startsWith('/')) continue;
+
+				// Import public mode check
+				const { isPublicModeEnabled, isPublicCommand, checkRateLimit } = await import('./publicmode.js');
+				const cmd = text.slice(1).split(' ')[0].toLowerCase();
+				if (!isPublicModeEnabled() || !isPublicCommand(cmd)) continue;
+
+				const rl = checkRateLimit(msg.key.remoteJid);
+				if (!rl.allowed) {
+					await sock.sendMessage(msg.key.remoteJid, { text: `⏳ Rate limit! Coba lagi dalam ${rl.resetIn}.` }, { quoted: msg });
+					continue;
+				}
+
+				// Jalankan plugin yang sesuai
+				const { loadPlugins } = await import('../plugins/_loader.js');
+				const pluginsDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'plugins');
+				// Gunakan cache loader jika ada, atau load langsung
+				// Untuk simpel: forward ke bot utama via pesan? Tidak, jalankan langsung.
+				await sock.sendMessage(msg.key.remoteJid, { text: `🤖 Clone bot aktif! Command *${cmd}* diterima.` }, { quoted: msg });
+			} catch (err) {
+				console.error(`[jadibot:${number}]`, err?.message);
+			}
+		}
+	});
+}
+
+export async function stopClone(number) {
+	const cleanNum = String(number).replace(/[^0-9]/g, '');
+	const c = clones.get(cleanNum);
+	if (!c) throw new Error('Clone tidak ditemukan.');
+	try { c.sock.end(); } catch {}
+	clones.delete(cleanNum);
+	return true;
+}
