@@ -56,24 +56,42 @@ function lockPath(botId) {
 }
 
 /**
- * Lock per-session memakai flock.
- * Return fd yang harus ditutup saat selesai, atau null jika gagal.
+ * Lock per-session memakai file lock + PID.
+ * Sederhana dan aman: tulis PID ke file, cek apakah PID masih hidup.
+ * Return true jika lock didapat, false jika dipakai proses lain.
  */
 function acquireLock(botId) {
 	const dir = sessionPath(botId);
 	fs.mkdirSync(dir, { recursive: true });
 	const lp = lockPath(botId);
 	try {
-		const fd = fs.openSync(lp, 'w');
-		execFileSync('flock', ['-n', String(fd)], { stdio: 'ignore' });
-		return fd;
+		if (fs.existsSync(lp)) {
+			const pid = parseInt(fs.readFileSync(lp, 'utf-8').trim(), 10);
+			if (pid && pid > 0) {
+				try {
+					// Cek apakah PID masih hidup
+					process.kill(pid, 0);
+					return null; // masih dipakai
+				} catch {
+					// PID mati, lock basi — ambil alih
+				}
+			}
+		}
+		fs.writeFileSync(lp, String(process.pid));
+		return true;
 	} catch {
 		return null;
 	}
 }
 
-function releaseLock(fd) {
-	try { fs.closeSync(fd); } catch {}
+function releaseLock(botId) {
+	try {
+		const lp = lockPath(botId);
+		if (fs.existsSync(lp)) {
+			const pid = parseInt(fs.readFileSync(lp, 'utf-8').trim(), 10);
+			if (pid === process.pid) fs.unlinkSync(lp);
+		}
+	} catch {}
 }
 
 /** Cek apakah creds "teracuni": me diset tapi belum registered. */
@@ -88,7 +106,7 @@ function isPoisoned(botId) {
 
 export class BotSessionManager {
 	constructor() {
-		/** Map<botId, { sock, status, lockFd, reconnectTimer, onCode }> */
+		/** Map<botId, { sock, status, reconnectTimer, onCode, onAttach }> */
 		this.sessions = new Map();
 		this.shuttingDown = false;
 	}
@@ -132,8 +150,7 @@ export class BotSessionManager {
 			fs.rmSync(sessionPath(id), { recursive: true, force: true });
 		}
 
-		const lockFd = acquireLock(id);
-		if (lockFd === null) {
+		if (!acquireLock(id)) {
 			throw new Error(`Session ${id} sedang dipakai proses lain.`);
 		}
 
@@ -152,7 +169,7 @@ export class BotSessionManager {
 			syncFullHistory: false,
 		});
 
-		const entry = { sock, status: 'connecting', lockFd, reconnectTimer: null, onCode };
+		const entry = { sock, status: 'connecting', reconnectTimer: null, onCode, onAttach: null };
 		this.sessions.set(id, entry);
 
 		sock.ev.on('creds.update', saveCreds);
@@ -209,7 +226,7 @@ export class BotSessionManager {
 		if (e) {
 			if (e.reconnectTimer) clearTimeout(e.reconnectTimer);
 			try { e.sock.end(); } catch {}
-			if (e.lockFd !== null && e.lockFd !== undefined) releaseLock(e.lockFd);
+			releaseLock(id);
 			this.sessions.delete(id);
 		}
 		// Hapus folder session (TIDAK PERNAH menyentuh session utama)
@@ -231,7 +248,7 @@ export class BotSessionManager {
 		if (e) {
 			if (e.reconnectTimer) clearTimeout(e.reconnectTimer);
 			try { e.sock.end(); } catch {}
-			if (e.lockFd !== null && e.lockFd !== undefined) releaseLock(e.lockFd);
+			releaseLock(id);
 			this.sessions.delete(id);
 		}
 		return this.create(id, onCode);
