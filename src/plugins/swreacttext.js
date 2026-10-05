@@ -34,10 +34,10 @@ export default {
 	async run(ctx) {
 	const { hisoka, m, query, text, quoted, message, messagesType } = ctx;
 					{
-						const sw = readSwConfig();
+						const sw = readSwConfig(hisoka);
 						const teks = (query || '').trim().toLowerCase();
 						if (teks === 'off' || teks === 'kosong') {
-							writeSwConfig({ react_text: '' });
+							writeSwConfig({ react_text: '' }, hisoka);
 							await m.reply(`🔤 React teks dimatikan, balik pakai emoji.`);
 							return;
 						}
@@ -54,7 +54,7 @@ export default {
 							await m.reply('Tulisannya kosong.');
 							return;
 						}
-						writeSwConfig({ react_text: opts.join(' | ') });
+						writeSwConfig({ react_text: opts.join(' | ') }, hisoka);
 						await m.reply(
 							opts.length > 1
 								? `🔤 React status sekarang ACAK dari ${opts.length} tulisan:\n${opts.map((o, i) => `${i + 1}. "${o}"`).join('\n')}`

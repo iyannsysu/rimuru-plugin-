@@ -162,7 +162,7 @@ export default async function (m, hisoka) {
 			const readType = privacySettings.readreceipts === 'all' ? 'read' : 'read-self';
 
 			// Config status: baca otomatis & react otomatis (bisa on/off via .swread / .swreact)
-			const sw = readSwConfig();
+			const sw = readSwConfig(hisoka);
 
 			// Auto-read status (tandai "dibaca")
 			if (sw.autoread) {
