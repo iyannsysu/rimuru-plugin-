@@ -160,28 +160,23 @@ export default {
 								// Tampilkan 3 chapter terbaru sebagai tombol (seperti .play)
 								const { saveButtonChoice } = await import('../helper/buttons.js');
 								const latest = chapters.slice(0, 3);
-								const buttons = latest.map((c, i) => {
+								const btnData = latest.map((c, i) => {
 									const bid = `mh_ch_${Date.now()}_${i}`;
 									saveButtonChoice(bid, {
 										type: 'mh_chapter',
 										manga, chapter: c.chapter, chapterId: c.id,
 										mangaIdx: idx,
 									});
-									return {
-										buttonId: bid,
-										buttonText: { displayText: `📖 Ch.${c.chapter}` },
-										type: 1,
-									};
+									return { id: bid, text: `📖 Ch.${c.chapter}` };
 								});
 								const list = chapters.slice(0, 10).map(c => `• ${c.chapter}${c.title ? ' — ' + c.title.slice(0, 25) : ''}`).join('\n');
 								const more = chapters.length > 10 ? `\n_...dan ${chapters.length - 10} lainnya_` : '';
 								const caption = `📚 *${manga.title}*\n${chapters.length} chapter 🇮🇩\n\n${list}${more}\n\n👇 _Tap tombol untuk baca langsung, atau ketik:_\n_.manhwa baca ${idx + 1} <chapter>_`;
-								await hisoka.sendMessage(m.from, {
-									text: caption,
+								const { sendButtons } = await import('../helper/sendbuttons.js');
+								await sendButtons(hisoka, m.from, caption, btnData, {
+									quoted: m,
 									footer: 'Pilihan hangus dalam 2 menit',
-									buttons,
-									headerType: 1,
-								}, { quoted: m });
+								});
 							} catch (err) {
 								await m.reply('❌ ' + (err?.message || 'Gagal mengambil chapter.'));
 							}

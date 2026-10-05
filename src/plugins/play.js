@@ -74,30 +74,17 @@ export default {
 							saveButtonChoice(audioId, { type: 'play_audio', title, audioUrl, query: q });
 							saveButtonChoice(videoId, { type: 'play_video', title, query: q, videoUrl: info.id ? `https://www.youtube.com/watch?v=${info.id}` : null });
 
-							const caption = `┌─〔 🎵 PLAY MUSIC 〕─┐\n│\n│ 📌 *${title}*\n│ ⏱️ Durasi : ${duration}\n│ 👁️ Views  : ${views}\n│ 👤 Channel: ${channel}\n│ 🔗 Link   : https://www.youtube.com/watch?v=${info.id || ''}\n│\n│ Pilih format di bawah 👇\n└───────────────\n\n⏳ _Pilihan hangus dalam 2 menit_`;
+							const caption = `┌─〔 🎵 PLAY MUSIC 〕─┐\n│\n│ 📌 *${title}*\n│ ⏱️ Durasi : ${duration}\n│ 👁️ Views  : ${views}\n│ 👤 Channel: ${channel}\n│ 🔗 Link   : https://www.youtube.com/watch?v=${info.id || ''}\n│\n│ Pilih format di bawah 👇\n└───────────────`;
 
-							const buttons = [
-								{ buttonId: audioId, buttonText: { displayText: '🎵 Audio MP3' }, type: 1 },
-								{ buttonId: videoId, buttonText: { displayText: '🎬 Video MP4' }, type: 1 },
-							];
-
-							const msgOpts = { quoted: m };
-							if (thumb) {
-								await hisoka.sendMessage(m.from, {
-									image: { url: thumb },
-									caption,
-									footer: 'Pilih format audio atau video',
-									buttons,
-									headerType: 4,
-								}, msgOpts);
-							} else {
-								await hisoka.sendMessage(m.from, {
-									text: caption,
-									footer: 'Pilih format audio atau video',
-									buttons,
-									headerType: 1,
-								}, msgOpts);
-							}
+							const { sendButtons } = await import('../helper/sendbuttons.js');
+							await sendButtons(hisoka, m.from, caption, [
+								{ id: audioId, text: '🎵 Audio MP3' },
+								{ id: videoId, text: '🎬 Video MP4' },
+							], {
+								quoted: m,
+								footer: '⏳ Pilihan hangus dalam 2 menit',
+								image: thumb,
+							});
 						} catch (err) {
 							const emsg = err?.message || 'Gagal mencari lagu.';
 							await playLoad.fail('❌ ' + emsg);

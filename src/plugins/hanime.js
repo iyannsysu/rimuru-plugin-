@@ -87,26 +87,20 @@ export default {
 							hanimeSearchCache.set(m.sender, results);
 							// Tombol untuk 3 teratas
 							const { saveButtonChoice } = await import('../helper/buttons.js');
-							const buttons = results.slice(0, 3).map((v, i) => {
+							const btnData = results.slice(0, 3).map((v, i) => {
 								const bid = `dl_hanime_${Date.now()}_${i}`;
 								saveButtonChoice(bid, { type: 'dl_hanime', idx: i });
-								return {
-									buttonId: bid,
-									buttonText: { displayText: `📺 ${v.name.slice(0, 30)}` },
-									type: 1,
-								};
+								return { id: bid, text: `📺 ${v.name.slice(0, 25)}` };
 							});
 							let txt = `📺 *Hasil: ${raw}*\n\n`;
 							results.forEach((v, i) => {
 								txt += `${i + 1}. *${v.name}*\n   👁️ ${shortNum(v.views)} | 👍 ${shortNum(v.likes)}\n`;
 							});
 							txt += `\n👇 _Tap untuk tonton langsung:_`;
-							await hisoka.sendMessage(m.from, {
-								text: txt,
-								footer: 'Pilihan hangus dalam 2 menit',
-								buttons,
-								headerType: 1,
-							}, { quoted: m });
+							const { sendButtons } = await import('../helper/sendbuttons.js');
+							await sendButtons(hisoka, m.from, txt, btnData, {
+								quoted: m, footer: 'Pilihan hangus dalam 2 menit',
+							});
 						} catch (err) {
 							await m.reply('❌ ' + (err?.message || 'Gagal mencari video.'));
 						}
