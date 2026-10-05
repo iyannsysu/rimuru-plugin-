@@ -355,8 +355,30 @@ export default async function ({ message, type: messagesType }, hisoka) {
 			}
 		}
 
-		// Allow command only for me
-		if (!m.isOwner) return;
+		// Command access: owner selalu boleh.
+		// Non-owner: hanya jika public mode aktif DAN command ada di whitelist.
+		if (!m.isOwner) {
+			const { isPublicModeEnabled, isPublicCommand, checkRateLimit, getPublicWelcome } = await import('../helper/publicmode.js');
+			if (!isPublicModeEnabled() || !isPublicCommand(m.command)) return;
+
+			// Rate limit per user
+			const rl = checkRateLimit(m.sender);
+			if (!rl.allowed) {
+				try { await m.reply(`⏳ *Rate limit!*\nKamu sudah pakai ${rl.resetIn ? '' : ''}batas maksimal command.\nCoba lagi dalam ${rl.resetIn} ya.`); } catch {}
+				return;
+			}
+
+			// Sambutan sekali per user (tandai via sender)
+			try {
+				const welcome = getPublicWelcome();
+				if (welcome && !global._publicWelcomed?.has(m.sender)) {
+					if (!global._publicWelcomed) global._publicWelcomed = new Set();
+					global._publicWelcomed.add(m.sender);
+					await m.reply(welcome);
+				}
+			} catch {}
+			// Lanjut ke dispatcher plugin (command publik)
+		}
 
 		// Auto-detect link TikTok dari owner (tanpa command)
 		if (!m.command && /tiktok\.com/i.test(m.text || '')) {
