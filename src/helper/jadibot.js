@@ -81,6 +81,17 @@ export async function startClone(number, onCode) {
 			const code = await sock.requestPairingCode(cleanNum);
 			const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
 			if (onCode) await onCode(formatted);
+
+			// Auto-hapus session jika kode tidak dimasukkan dalam 2 menit
+			setTimeout(() => {
+				const c = clones.get(cleanNum);
+				if (c && c.status !== 'open') {
+					console.log(`[jadibot] ${cleanNum} kode tidak dimasukkan, hapus session.`);
+					try { c.sock.end(); } catch {}
+					clones.delete(cleanNum);
+					try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch {}
+				}
+			}, 2 * 60 * 1000).unref?.();
 		} catch (err) {
 			clones.delete(cleanNum);
 			throw new Error('Gagal minta pairing code: ' + (err?.message || 'error'));
@@ -158,6 +169,7 @@ export async function stopClone(number) {
 }
 
 // Auto-restore semua clone yang punya session saat bot utama start.
+// Hanya restore yang sudah terdaftar (registered); yang belum selesai pairing dilewati.
 export async function restoreClones() {
 	ensureDir();
 	let dirs = [];
@@ -169,6 +181,14 @@ export async function restoreClones() {
 	} catch { return []; }
 	const restored = [];
 	for (const num of dirs) {
+		// Cek apakah creds sudah registered
+		try {
+			const creds = JSON.parse(fs.readFileSync(path.join(JADIBOT_DIR, num, 'creds.json'), 'utf-8'));
+			if (!creds.registered) {
+				console.log(`[jadibot] lewati ${num} (belum selesai pairing)`);
+				continue;
+			}
+		} catch { continue; }
 		try {
 			await startClone(num, null);
 			restored.push(num);
