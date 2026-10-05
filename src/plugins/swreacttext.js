@@ -28,7 +28,7 @@ import * as shared from './_shared.js';
 
 export default {
 	name: 'swreacttext',
-	aliases: [],
+	aliases: ['ubahreact'],
 	category: 'STATUS',
 	desc: '',
 	async run(ctx) {
