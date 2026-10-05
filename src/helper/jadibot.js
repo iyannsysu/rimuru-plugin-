@@ -76,15 +76,18 @@ export async function startClone(number, onCode) {
 
 	// Minta pairing code jika belum terdaftar
 	if (!sock.authState.creds.registered) {
-		await delay(15000); // tunggu handshake
+		await delay(8000); // tunggu handshake (dikurangi dari 15s)
 		try {
 			const code = await sock.requestPairingCode(cleanNum);
 			const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
-			if (onCode) onCode(formatted);
+			if (onCode) await onCode(formatted);
 		} catch (err) {
 			clones.delete(cleanNum);
 			throw new Error('Gagal minta pairing code: ' + (err?.message || 'error'));
 		}
+	} else if (onCode) {
+		// Sudah terdaftar, langsung hubungkan
+		await onCode(null);
 	}
 
 	sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
