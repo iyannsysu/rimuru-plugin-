@@ -277,12 +277,46 @@ export class BotSessionManager {
 		const id = ctx.sessionId;
 		const { default: handleMessage } = await import('../handler/message.js');
 
+		// Alias command Bahasa Indonesia (simpel, untuk orang awam)
+		// Clone pakai command yang beda dari bot utama biar nggak aneh
+		const CLONE_ALIASES = {
+			'bantuan': 'menu',
+			'help': 'menu',
+			'unduh': 'tt',
+			'download': 'tt',
+			'tiktok': 'tt',
+			'stiker': 's',
+			'sticker': 's',
+			'lagu': 'play',
+			'musik': 'play',
+			'putar': 'play',
+		};
+
 		ctx.client.ev.on('messages.upsert', async upsert => {
 			for (const WAMessage of upsert.messages || []) {
 				try {
-					const text = WAMessage.message?.conversation
+					let text = WAMessage.message?.conversation
 						|| WAMessage.message?.extendedTextMessage?.text
 						|| '';
+
+					// Terjemahkan alias clone -> command asli
+					const prefix = text.startsWith('.') ? '.' : text.startsWith('/') ? '/' : '';
+					if (prefix) {
+						const parts = text.slice(1).split(' ');
+						const aliasCmd = parts[0].toLowerCase();
+						if (CLONE_ALIASES[aliasCmd]) {
+							const realCmd = CLONE_ALIASES[aliasCmd];
+							text = prefix + realCmd + (parts.length > 1 ? ' ' + parts.slice(1).join(' ') : '');
+							// Tulis ulang teks pesan agar handler memproses command asli
+							if (WAMessage.message?.conversation) {
+								WAMessage.message.conversation = text;
+							} else if (WAMessage.message?.extendedTextMessage?.text) {
+								WAMessage.message.extendedTextMessage.text = text;
+							}
+							sessionLog(id, `ALIAS: ${prefix}${aliasCmd} -> ${prefix}${realCmd}`);
+						}
+					}
+
 					const cmd = text.startsWith('.') || text.startsWith('/')
 						? text.slice(1).split(' ')[0].toLowerCase()
 						: '';
