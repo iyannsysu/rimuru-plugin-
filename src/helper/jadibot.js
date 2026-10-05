@@ -40,6 +40,20 @@ export async function startClone(number, onCode) {
 
 	const sessionDir = path.join(JADIBOT_DIR, cleanNum);
 
+	// FIX: Hapus creds yang "teracuni" — creds.me sudah diset tapi registered=false
+	// (terjadi saat pairing code diminta tapi tidak dimasukkan).
+	// Kondisi ini bikin koneksi berikutnya 401 dan session rusak.
+	try {
+		const credsPath = path.join(sessionDir, 'creds.json');
+		if (fs.existsSync(credsPath)) {
+			const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
+			if (creds.me && !creds.registered) {
+				console.log(`[jadibot] ${cleanNum} creds teracuni, hapus session.`);
+				fs.rmSync(sessionDir, { recursive: true, force: true });
+			}
+		}
+	} catch {}
+
 	// Import Baileys secara dinamis
 	const baileys = await import('baileys');
 	const makeWASocket = baileys.default;
